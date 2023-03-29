@@ -1,9 +1,22 @@
-Steps:
-1. git clone ...
-2. right mouse click on ps1-file / Unblock
-3. try to exec psh.bat. It has to suggest any from your putty session
+## Description
+This script allow to use putty's sessions inside Windows Terminal.
 
-Switch to Windows ssh-agent:
-1. clear from memory git's ssh-agent and user's variables SSH_AGENT_PID and SSH_AUTH_SOCK
-2. prepare git to use system's ssh: git config --global core.sshCommand "'C:\Windows\System32\OpenSSH\ssh.exe'"
-3. setup bat-file to startup with system to add required keys to agent: ssh-add, ssh-add path_to_key (keys location at ~/.ssh/)
+### How to setup
+1. `git clone git@github.com:SailorMax/psh.git`
+2. right mouse click on ps1-file / Properties / `Unblock`
+3. try to exec `psh.bat`. It has to output all putty session names and suggest to choose anyone to connect
+4. add to `PATH` your clone-directory (SystemPropertiesAdvanced/Enviroment Variables.../User variables)
+5. open Windows Terminal / "Command Prompt" / `psh` (as second argument you can use word to filter sessions list)
+
+---
+### Switch to Windows ssh-agent:
+1. remove from memory git's `ssh-agent` (task manager), remove user's variables `SSH_AGENT_PID` and `SSH_AUTH_SOCK` (SystemPropertiesAdvanced/Enviroment Variables...), remove from `PATH` directory of Git's ssh (if it exists)
+2. install via Windows "Optional features" `OpenSSH client`
+3. prepare Git to use system's ssh: `git config --global core.sshCommand "'C:\Windows\System32\OpenSSH\ssh.exe'"`
+4. setup bat-file to startup with system to add required keys to agent:
+```bat
+rem add default user's key (at ~/.ssh/)
+ssh-add
+rem add specific user's key
+ssh-add path_to_key
+```
