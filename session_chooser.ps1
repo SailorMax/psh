@@ -1,5 +1,6 @@
 # init
 $RegistryPath = "Registry::HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\"
+$OriginalTitle = "$Host.UI.RawUI.WindowTitle"
 
 # get all sessions
 $Sessions = Get-Item -Path "$($RegistryPath)*" |
@@ -31,8 +32,9 @@ if ($Number -eq 0) {
 	putty
 } else {
 	# get connection parameters
-	$HostPortUser = Get-ItemPropertyValue -Path "$($RegistryPath)$($Sessions[$Number-1])" -Name HostName, PortNumber, UserName, UserNameFromEnvironment
-	Write-Host "connecting to $($Sessions[$Number-1]) ($($HostPortUser[0]):$($HostPortUser[1]))..."
+	$SessionName = $Sessions[$Number-1];
+	$HostPortUser = Get-ItemPropertyValue -Path "$($RegistryPath)$($SessionName)" -Name HostName, PortNumber, UserName, UserNameFromEnvironment
+	Write-Host "connecting to $SessionName ($($HostPortUser[0]):$($HostPortUser[1]))..."
 
 	# get username
 	$UserName=""
@@ -46,6 +48,8 @@ if ($Number -eq 0) {
 	}
 
 	# start session
+	$Host.UI.RawUI.WindowTitle = "$SessionName ($($HostPortUser[0]))"
 	$UserHost = "$($UserName)$($HostPortUser[0])"
 	ssh -p $HostPortUser[1] $UserHost
+	$Host.UI.RawUI.WindowTitle = $OriginalTitle
 }
