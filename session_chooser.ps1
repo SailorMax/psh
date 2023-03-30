@@ -2,28 +2,53 @@
 $RegistryPath = "Registry::HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\"
 $OriginalTitle = "$Host.UI.RawUI.WindowTitle"
 
+function Output-SessionsList {
+    param (
+        $Sessions
+    )
+
+	$counter = 1;
+	Write-Host "-. exit"
+	Write-Host "0. putty"
+	$Sessions | ForEach-Object {"$($counter). $($_)"; $counter++}
+	Write-Host "---"
+}
+
 # get all sessions
-$Sessions = Get-Item -Path "$($RegistryPath)*" |
+$AllSessions = Get-Item -Path "$($RegistryPath)*" |
 			Select-Object -ExpandProperty Name |
 			Split-Path -leaf |
 			Sort-Object
 
-# filter list
-$mask = $args[0]
-if ($mask.Length -gt 0) {
-	$Sessions = $Sessions | Where-Object {$_ -match $mask}
-}
+$Mask = $args[0]
+$PrevMask = "$([char]0x00)"
+while (1) {
+	# output list
+	if ($PrevMask -ne $Mask) {
+		# filter list
+		if ($Mask.Length -gt 0) {
+			$Sessions = @($AllSessions | Where-Object {$_ -match $Mask})
+		} else {
+			$Sessions = @($AllSessions)
+		}
 
-# output list
-$counter = 1;
-Write-Host "0. putty"
-$Sessions | ForEach-Object {"$($counter). $($_)"; $counter++}
-Write-Host "---"
-# ask to choose
-[ValidateScript({$_ -ge 0 -and $_ -le $Sessions.Length})]
-[int]$Number = Read-Host "Choose session by number"
-if (!$?) {
-	exit
+		Output-SessionsList $Sessions
+		$PrevMask = $Mask
+	}
+
+	# prompt
+	$Number = Read-Host "Choose session by number or enter mask"
+	if ($Number -match '^\d+$' -and $Number -ge 0 -and $Number -le $Sessions.Length) {
+		break
+	} elseif ($Number -eq '-' -or $Number -eq '.') {
+		exit
+	} else {
+		if ($Number -notmatch '^\d+$') {
+			$Mask = $Number
+		} else {
+			Write-Host "wrong number"
+		}
+	}
 }
 
 # execute
