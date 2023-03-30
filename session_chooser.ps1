@@ -92,6 +92,7 @@ if ($Number -eq 0) {
 			$PauseSeconds = 5
 		} elseif ($PauseSeconds -gt 30) {
 			Write-Host -NoNewLine "Too many reconnections. Press any key to retry...";
+			$Host.UI.RawUI.FlushInputBuffer()
 			$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyUp');
 			Write-Host ""
 			$PauseSeconds = 5
