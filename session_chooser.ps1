@@ -2,16 +2,26 @@
 $RegistryPath = "Registry::HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\"
 $OriginalTitle = "$Host.UI.RawUI.WindowTitle"
 
+function Wait-PressEnter {
+	$Host.UI.RawUI.FlushInputBuffer()
+	$KeyEvent = $null
+	do {
+		$PrevKeyEvent = $KeyEvent
+		$KeyEvent = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown,IncludeKeyUp')
+	} while (-not ($PrevKeyEvent -and ($KeyEvent.VirtualKeyCode -eq 13) -and ($PrevKeyEvent.VirtualKeyCode -eq $KeyEvent.VirtualKeyCode) -and ($PrevKeyEvent.KeyDown -ne $KeyEvent.KeyDown)))
+}
+
 function Output-SessionsList {
     param (
         $Sessions
     )
 
-	$counter = 1;
+	$counter = 1
 	Write-Host "0. putty"
 	$Sessions | ForEach-Object {"$($counter). $($_)"; $counter++}
 	Write-Host "---"
 }
+
 
 # get all sessions
 $AllSessions = @(Get-Item -Path "$($RegistryPath)*" |
@@ -21,7 +31,7 @@ $AllSessions = @(Get-Item -Path "$($RegistryPath)*" |
 
 $Mask = $args[0]
 $PrevMask = "$([char]0x00)"
-while (1) {
+while ($true) {
 	# output list
 	if ($PrevMask -ne $Mask) {
 		# filter list
@@ -37,7 +47,7 @@ while (1) {
 
 	# prompt
 	$Number = Read-Host "Choose session by number or enter filter word"
-	if ($Number -match '^\d+$' -and $Number -ge 0 -and $Number -le $Sessions.Length) {
+	if ($Number -match '^\d+$' -and [int]$Number -ge 0 -and [int]$Number -le $Sessions.Length) {
 		break
 	} elseif ($Number -eq '-' -or $Number -eq '.') {
 		exit
@@ -56,10 +66,10 @@ if ($Number -eq 0) {
 	putty
 } else {
 	# get connection parameters
-	$SessionName = $Sessions[$Number-1];
+	$SessionName = $Sessions[$Number-1]
 	$HostPortUser = Get-ItemPropertyValue -Path "$($RegistryPath)$($SessionName)" -Name HostName, PortNumber, UserName, UserNameFromEnvironment
-	Write-Host -NoNewLine "connecting to "
-	Write-Host -NoNewLine $SessionName -ForegroundColor Yellow
+	Write-Host "connecting to " -NoNewLine
+	Write-Host $SessionName -NoNewLine -ForegroundColor Yellow
 	Write-Host " ($($HostPortUser[0]):$($HostPortUser[1]))..."
 
 	# get username
@@ -79,7 +89,7 @@ if ($Number -eq 0) {
 	$UserHost = "$($UserName)$($HostPortUser[0])"
 
 	$PauseSeconds = 5
-	while (1) {
+	while ($true) {
 		$ts = ([DateTime](Get-Date)).ToFileTimeUtc()
 		ssh -p $HostPortUser[1] $UserHost
 		if ($?) {
@@ -87,13 +97,13 @@ if ($Number -eq 0) {
 			break
 		}
 
-		if (([DateTime](Get-Date)).ToFileTimeUtc() - $ts -gt 800000000) {
-			# was successfuly connection (>80s) => start retries from begin
+		if (([DateTime](Get-Date)).ToFileTimeUtc() - $ts -gt 1200000000) {
+			# was successfuly connection (>120s) => start retries from begin
 			$PauseSeconds = 5
 		} elseif ($PauseSeconds -gt 30) {
-			Write-Host -NoNewLine "Too many reconnections. Press any key to retry...";
-			$Host.UI.RawUI.FlushInputBuffer()
-			$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyUp');
+			Write-Host "[ $((Get-Date).toString('yyyy-MM-dd HH:mm:ss')) ]"
+			Write-Host -NoNewLine "Too many reconnections. Press ENTER to retry..."
+			Wait-PressEnter
 			Write-Host ""
 			$PauseSeconds = 5
 			continue
