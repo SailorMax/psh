@@ -22,6 +22,10 @@ function Output-SessionsList {
 	Write-Host "---"
 }
 
+function Get-Timestamp {
+	return [Math]::Floor(([DateTime](Get-Date)).ToFileTimeUtc() / 10000000)
+}
+
 
 # get all sessions
 $AllSessions = @(Get-Item -Path "$($RegistryPath)*" |
@@ -90,14 +94,14 @@ if ($Number -eq 0) {
 
 	$PauseSeconds = 5
 	while ($true) {
-		$ts = ([DateTime](Get-Date)).ToFileTimeUtc()
+		$ts = Get-Timestamp
 		ssh -p $HostPortUser[1] $UserHost
 		if ($?) {
 			# normal exit
 			break
 		}
 
-		if (([DateTime](Get-Date)).ToFileTimeUtc() - $ts -gt 1200000000) {
+		if (($(Get-Timestamp) - $ts) -gt 120) {
 			# was successfuly connection (>120s) => start retries from begin
 			$PauseSeconds = 5
 		} elseif ($PauseSeconds -gt 30) {
