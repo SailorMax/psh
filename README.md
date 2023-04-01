@@ -17,5 +17,5 @@ This solution allow to use putty's sessions inside Windows Terminal and not only
 4. if require, prepare file similar to `config/add_default_key_to_agent.bat` or use this one in autostart/manual setup ssh-agent after each Windows restart.
 5. to use new `PATH` some programs require restart
 
----
+
 (!) Warning! Some programs still doesn't support "WinSSH" (DBeaver, for example). For them you can try to use Putty's Peagan as separate process. Or setup variables `SSH_AGENT_PID` and `SSH_AUTH_SOCK` for "WinSSH".
