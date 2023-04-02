@@ -1,12 +1,14 @@
 # Putty shell
 This solution allow to use putty's sessions inside Windows Terminal and not only.
 
+Just execute `psh` and choose required session.
+
 ## How to setup
-1. `git clone git@github.com:SailorMax/psh.git`
+1. `git clone https://github.com/SailorMax/psh.git`
 2. right mouse click on ps1-file / Properties / `Unblock`
 3. try to exec `psh.bat`. It has to output all putty session names and suggest to choose anyone to connect
 4. add to `PATH` your clone-directory (SystemPropertiesAdvanced / Enviroment Variables... / User variables)
-5. open Windows Terminal and execute `psh` (as second argument you can use word to filter sessions list)
+5. open Windows Terminal and execute `psh` (as second argument you can use word to filter sessions list or directly host:port)
 <br /><br />
 
 ---
@@ -18,4 +20,4 @@ This solution allow to use putty's sessions inside Windows Terminal and not only
 5. to use new `PATH` some programs require restart
 
 
-(!) Warning! Some programs still doesn't support "WinSSH" (DBeaver, for example). For them you can try to use Putty's Peagan as separate process. Or setup variables `SSH_AGENT_PID` and `SSH_AUTH_SOCK` for "WinSSH".
+(!) Warning! Some programs still doesn't support "WinSSH" (DBeaver, for example). For them you can try to use Putty's Peagant as separate process. Or setup variables `SSH_AGENT_PID` and `SSH_AUTH_SOCK` for "WinSSH".
