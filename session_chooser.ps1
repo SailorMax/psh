@@ -185,8 +185,8 @@ function Open-Session {
 	while ($true) {
 		$ts = Get-Timestamp
 		ssh -p $PortNumber $UserName$HostName
-		if ($?) {
-			# normal exit
+		if ($? -or $LASTEXITCODE -eq 255) {
+			# normal exit or result of Ctrl-C and not fixable error?
 			break
 		}
 
