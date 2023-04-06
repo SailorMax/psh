@@ -195,7 +195,7 @@ function Open-Session {
 			$PauseSeconds = 5
 		} elseif ($PauseSeconds -gt 30) {
 			Write-Host "[ $((Get-Date).toString('yyyy-MM-dd HH:mm:ss')) ]"
-			Write-Host -NoNewLine "Too many reconnections. Press ENTER to retry..."
+			Write-Host "Too many reconnections. Press ENTER to retry..." -NoNewLine
 			Wait-PressEnter
 			Write-Host ""
 			$PauseSeconds = 5
