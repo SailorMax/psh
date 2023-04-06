@@ -2,6 +2,9 @@
 $RegistryPath = 'Registry::HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\'
 $OriginalTitle = $Host.UI.RawUI.WindowTitle
 
+$InputMask = $args[0]
+$CheckConnectionTimeout = $args[1]
+
 function Wait-PressEnter {
 	$Host.UI.RawUI.FlushInputBuffer()
 	$KeyEvent = $null
@@ -68,7 +71,7 @@ function Choose-Session {
 		Write-Host ', enter filter ' -NoNewLine
 		Write-Host 'word' -ForegroundColor Green -NoNewLine
 		Write-Host ' or ' -NoNewLine
-		Write-Host 'address:port' -ForegroundColor Green -NoNewLine
+		Write-Host 'host:port' -ForegroundColor Green -NoNewLine
 		Write-Host ': ' -NoNewLine
 		$Number = Read-Host
 		if ($Number -match '^\d+$' -and [int]$Number -ge 0 -and [int]$Number -le $Sessions.Length) {
@@ -116,6 +119,36 @@ function Get-UserName {
 	return $UserName
 }
 
+function Check-HostConnection {
+    param (
+        [string]$HostName,
+		[int]$PortNumber
+    )
+
+	$timeout = 2000
+	if ($CheckConnectionTimeout -ne $null) {
+		$timeout = $CheckConnectionTimeout
+	}
+
+	$Socket = New-Object System.Net.Sockets.TcpClient
+	try {
+		$Result = $Socket.BeginConnect($HostName, $PortNumber, $NULL, $NULL)
+		if (!$result.AsyncWaitHandle.WaitOne($timeout, $false)) {
+			throw [System.Exception]::new('Connection Timeout')
+		}
+		$Socket.EndConnect($Result) | Out-Null
+		$HostAccessibility = $Socket.Connected
+	}
+	catch {
+		$HostAccessibility = $false
+	}
+	finally {
+		$Socket.Close()
+	}
+
+	return $HostAccessibility
+}
+
 function Open-Session {
     param (
 		[string]$SessionName,
@@ -135,6 +168,13 @@ function Open-Session {
 		Write-Host " ($($HostName):$PortNumber)" -NoNewLine
 	}
 	Write-Host '...'
+
+	$HostAccessibility = Check-HostConnection $HostName $PortNumber
+	if ($HostAccessibility -eq $false) {
+		Write-Host "Error" -ForegroundColor Red -NoNewLine
+		Write-Host ". Can't connect to the host."
+		exit 1
+	}
 
 	$UserName = Get-UserName $UserName $UserNameFromEnvironment
 
@@ -210,10 +250,8 @@ function Try-ToUseDirectHostNameAndExit {
 
 
 ### Main ####
-$Mask = $args[0]
-
-Try-ToUseDirectHostNameAndExit $Mask
-$SessionName = Choose-Session $Mask
+Try-ToUseDirectHostNameAndExit $InputMask
+$SessionName = Choose-Session $InputMask
 
 # execute
 if ($SessionName -eq $null) {
