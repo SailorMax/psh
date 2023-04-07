@@ -185,9 +185,17 @@ function Open-Session {
 	while ($true) {
 		$ts = Get-Timestamp
 		ssh -p $PortNumber $UserName$HostName
-		if ($?) {	#  -or $LASTEXITCODE -eq 255 (or result of Ctrl-C and not fixable error?) // but also on simple connection reset :/
+		if ($?) {
 			# normal exit
 			break
+		}
+		if ($Host.UI.RawUI.KeyAvailable) {
+			$KeyEvent = $Host.UI.RawUI.ReadKey('AllowCtrlC,NoEcho,IncludeKeyDown,IncludeKeyUp')
+			# check Ctr-C release (ctrl + c up)
+			if ($KeyEvent.KeyDown -eq $false -and $KeyEvent.VirtualKeyCode -eq 67) {	# meta + 8 in Mac?
+				# normal exit
+				break
+			}
 		}
 
 		if (($(Get-Timestamp) - $ts) -gt 120) {
