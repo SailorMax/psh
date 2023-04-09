@@ -1,3 +1,8 @@
+# Support arguments:
+# - filter_word
+# - host:port
+# - host:port check_host_timeout
+
 # init
 $RegistryPath = 'Registry::HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\'
 $OriginalTitle = $Host.UI.RawUI.WindowTitle
@@ -185,19 +190,23 @@ function Open-Session {
 	while ($true) {
 		$ts = Get-Timestamp
 		ssh -p $PortNumber $UserName$HostName
+
+		# check normal exit
 		if ($?) {
-			# normal exit
 			break
 		}
+		Write-Host "Exit code = $LASTEXITCODE"
+
+		# check exit by Ctrl-C
 		if ($Host.UI.RawUI.KeyAvailable) {
 			$KeyEvent = $Host.UI.RawUI.ReadKey('AllowCtrlC,NoEcho,IncludeKeyDown,IncludeKeyUp')
-			# check Ctr-C release (ctrl + c up)
 			if ($KeyEvent.KeyDown -eq $false -and $KeyEvent.VirtualKeyCode -eq 67) {	# meta + 8 in Mac?
-				# normal exit
+				# exit
 				break
 			}
 		}
 
+		# pause before next try
 		if (($(Get-Timestamp) - $ts) -gt 120) {
 			# was successfuly connection (>120s) => start retries from begin
 			$PauseSeconds = 5
@@ -206,13 +215,14 @@ function Open-Session {
 			Write-Host "Too many reconnections. Press ENTER to retry..." -NoNewLine
 			Wait-PressEnter
 			Write-Host ""
+			Write-Host "Reconnecting..."
 			$PauseSeconds = 5
 			continue
 		}
 
-		# retry on errors
 		Write-Host "Reconnection after $PauseSeconds seconds."
 		Start-Sleep -Seconds $PauseSeconds
+
 		Write-Host "Reconnecting..."
 		$PauseSeconds = $PauseSeconds * 2
 	}
