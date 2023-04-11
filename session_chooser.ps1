@@ -191,8 +191,8 @@ function Open-Session {
 		$ts = Get-Timestamp
 		ssh -p $PortNumber $UserName$HostName
 
-		# check normal exit
-		if ($?) {
+		# check normal exit or via self close (bash/Ctrl-C,..)
+		if ($? -or $LASTEXITCODE -eq 130) {
 			break
 		}
 		Write-Host "Exit code = $LASTEXITCODE"
