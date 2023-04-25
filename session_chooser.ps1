@@ -112,7 +112,8 @@ function Get-UserName {
 	if ($UserNameFromEnvironment -eq 0) {
 		if ($UserName.Length -eq 0) {
 			# ask username
-			[string]$UserName = Read-Host 'login as'
+			$LockIcon = [System.Char]::ConvertFromUtf32( [System.Convert]::toInt32("1F512", 16) )
+			[string]$UserName = Read-Host "$LockIcon login as"
 		} else {
 			Write-Host "login as: $UserName"
 		}
