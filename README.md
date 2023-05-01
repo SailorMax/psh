@@ -5,10 +5,9 @@ Just execute `psh` and choose required session.
 
 ## How to setup
 1. `git clone https://github.com/SailorMax/psh.git`
-2. right mouse click on ps1-file / Properties / `Unblock`
-3. try to exec `psh.bat`. It has to output all putty session names and suggest to choose anyone to connect
-4. add to `PATH` your clone-directory (SystemPropertiesAdvanced / Enviroment Variables... / User variables)
-5. open Windows Terminal and execute `psh` (as second argument you can use word to filter sessions list or directly host:port)
+2. execute `psh.bat`. It has to output all putty session names and suggest to choose anyone to connect. In case of session_chooser.ps1 is not executable try: right mouse click on ps1-file / Properties / `Unblock`
+3. add to `PATH` your clone-directory (SystemPropertiesAdvanced / Enviroment Variables... / User variables)
+4. open Windows Terminal and execute `psh` (as second argument you can use word to filter sessions list or directly host:port)
 <br /><br />
 
 ---

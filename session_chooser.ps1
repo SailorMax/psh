@@ -10,6 +10,11 @@ $OriginalTitle = $Host.UI.RawUI.WindowTitle
 $InputMask = $args[0]
 $CheckConnectionTimeout = $args[1]
 
+
+function Get-ClearHostLine {
+	return (" " * $Host.UI.RawUI.WindowSize.Width) + "`r"
+}
+
 function Wait-PressEnter {
 	$Host.UI.RawUI.FlushInputBuffer()
 	$KeyEvent = $null
@@ -103,7 +108,7 @@ function Get-Timestamp {
 	return [Math]::Floor(([DateTime](Get-Date)).ToFileTimeUtc() / 10000000)
 }
 
-function Get-UserName {
+function Get-UserNameAsPrefix {
     param (
 		[string]$UserName,
 		[int]$UserNameFromEnvironment
@@ -112,8 +117,7 @@ function Get-UserName {
 	if ($UserNameFromEnvironment -eq 0) {
 		if ($UserName.Length -eq 0) {
 			# ask username
-			$LockIcon = [System.Char]::ConvertFromUtf32( [System.Convert]::toInt32("1F512", 16) )
-			[string]$UserName = Read-Host "$LockIcon login as"
+			[string]$UserName = Read-Host "login as"
 		} else {
 			Write-Host "login as: $UserName"
 		}
@@ -165,7 +169,19 @@ function Open-Session {
     )
 
 	if ($SessionName.Length -eq 0) {
-		$SessionName = "$($HostName):$PortNumber"
+		# setup session name
+		try {
+			if ($HostName -match '^\d+\.\d+\.\d+\.\d+$') {
+				$SessionName = (Resolve-DnsName $HostName -CacheOnly -ErrorAction Stop).NameHost
+			} else {
+				$IPAddress = (Resolve-DnsName $HostName -Type A -CacheOnly -ErrorAction Stop)[0].IPAddress
+				$SessionName = $HostName
+				$HostName = $IPAddress
+			}
+		}
+		catch {
+			$SessionName = "$($HostName):$PortNumber"
+		}
 	}
 
 	Write-Host "connecting to " -NoNewLine
@@ -182,21 +198,25 @@ function Open-Session {
 		exit 1
 	}
 
-	$UserName = Get-UserName $UserName $UserNameFromEnvironment
+	# setup window title
+	if ($SessionName -eq "$($HostName):$PortNumber") {
+		$Host.UI.RawUI.WindowTitle = "$SessionName"
+	} else {
+		$Host.UI.RawUI.WindowTitle = "$SessionName ($($HostName):$PortNumber)"
+	}
 
 	# start session
-	$Host.UI.RawUI.WindowTitle = "$SessionName ($HostName)"
-
+	$UserNamePrefix = Get-UserNameAsPrefix $UserName $UserNameFromEnvironment
 	$PauseSeconds = 5
 	while ($true) {
 		$ts = Get-Timestamp
-		ssh -p $PortNumber $UserName$HostName
+		ssh -p $PortNumber $UserNamePrefix$HostName
 
 		# check normal exit or via self close (bash/Ctrl-C,..)
 		if ($? -or $LASTEXITCODE -eq 130) {
 			break
 		}
-		Write-Host "Exit code = $LASTEXITCODE"
+		Write-Host "$(Get-ClearHostLine)Exit code = $LASTEXITCODE"
 
 		# check exit by Ctrl-C
 		if ($Host.UI.RawUI.KeyAvailable) {
@@ -212,19 +232,19 @@ function Open-Session {
 			# was successfuly connection (>120s) => start retries from begin
 			$PauseSeconds = 5
 		} elseif ($PauseSeconds -gt 30) {
-			Write-Host "[ $((Get-Date).toString('yyyy-MM-dd HH:mm:ss')) ]"
-			Write-Host "Too many reconnections. Press ENTER to retry..." -NoNewLine
+			Write-Host "$(Get-ClearHostLine)[ $((Get-Date).toString('yyyy-MM-dd HH:mm:ss')) ]"
+			Write-Host "$(Get-ClearHostLine)Too many reconnections. Press ENTER to retry..." -NoNewLine
 			Wait-PressEnter
 			Write-Host ""
-			Write-Host "Reconnecting..."
+			Write-Host "$(Get-ClearHostLine)Reconnecting..."
 			$PauseSeconds = 5
 			continue
 		}
 
-		Write-Host "Reconnection after $PauseSeconds seconds."
+		Write-Host "$(Get-ClearHostLine)Reconnection after $PauseSeconds seconds."
 		Start-Sleep -Seconds $PauseSeconds
 
-		Write-Host "Reconnecting..."
+		Write-Host "$(Get-ClearHostLine)Reconnecting..."
 		$PauseSeconds = $PauseSeconds * 2
 	}
 
