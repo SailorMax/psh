@@ -10,6 +10,9 @@ $OriginalTitle = $Host.UI.RawUI.WindowTitle
 $InputMask = $args[0]
 $CheckConnectionTimeout = $args[1]
 
+function Get-Timestamp {
+	return [Math]::Floor(([DateTime](Get-Date)).ToFileTimeUtc() / 10000000)
+}
 
 function Get-ClearHostLine {
 	return (" " * $Host.UI.RawUI.WindowSize.Width) + "`r"
@@ -22,6 +25,28 @@ function Wait-PressEnter {
 		$PrevKeyEvent = $KeyEvent
 		$KeyEvent = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown,IncludeKeyUp')
 	} while (-not ($PrevKeyEvent -and ($KeyEvent.VirtualKeyCode -eq 13) -and ($PrevKeyEvent.VirtualKeyCode -eq $KeyEvent.VirtualKeyCode) -and ($PrevKeyEvent.KeyDown -ne $KeyEvent.KeyDown)))
+}
+
+function Sleep-OrWaitForPressEnter {
+    param (
+		[int]$Seconds
+    )
+
+	$StartTime = Get-Timestamp
+	while (($(Get-Timestamp) - $StartTime) -lt $Seconds)
+	{
+		Write-Host "`r$(Get-ClearHostLine)$($Seconds - ($(Get-Timestamp) - $StartTime))" -NoNewLine
+
+		if ($Host.UI.RawUI.KeyAvailable) {
+			$KeyEvent = $Host.UI.RawUI.ReadKey('AllowCtrlC,NoEcho,IncludeKeyDown,IncludeKeyUp')
+			if ($KeyEvent.KeyDown -eq $true -and ($KeyEvent.VirtualKeyCode -eq 13 -or $KeyEvent.VirtualKeyCode -eq 27)) {
+				break
+			}
+		} else {
+			Start-Sleep -Milliseconds 100
+		}
+	}
+	Write-Host "`r$(Get-ClearHostLine)" -NoNewLine
 }
 
 function Output-SessionsList {
@@ -102,10 +127,6 @@ function Choose-Session {
 	}
 
 	return $Sessions[$Number-1]
-}
-
-function Get-Timestamp {
-	return [Math]::Floor(([DateTime](Get-Date)).ToFileTimeUtc() / 10000000)
 }
 
 function Get-UserNameAsPrefix {
@@ -242,7 +263,7 @@ function Open-Session {
 		}
 
 		Write-Host "$(Get-ClearHostLine)Reconnection after $PauseSeconds seconds."
-		Start-Sleep -Seconds $PauseSeconds
+		Sleep-OrWaitForPressEnter $PauseSeconds
 
 		Write-Host "$(Get-ClearHostLine)Reconnecting..."
 		$PauseSeconds = $PauseSeconds * 2
