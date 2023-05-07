@@ -57,7 +57,7 @@ function Start-AbortableSleep {
 
 	if ($Text.Length -ne 0) {
 		if ($Aborted) {
-			Write-Host (" timer aborted." -f $Seconds)
+			Write-Host " timer aborted."
 		} else {
 			# restore original text for history
 			Write-Host ("`r$(Get-ClearHostLine)$Text" -f $Seconds)
