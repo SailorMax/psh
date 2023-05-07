@@ -27,26 +27,45 @@ function Wait-PressEnter {
 	} while (-not ($PrevKeyEvent -and ($KeyEvent.VirtualKeyCode -eq 13) -and ($PrevKeyEvent.VirtualKeyCode -eq $KeyEvent.VirtualKeyCode) -and ($PrevKeyEvent.KeyDown -ne $KeyEvent.KeyDown)))
 }
 
-function Sleep-OrWaitForPressEnter {
+function Start-AbortableSleep {
     param (
-		[int]$Seconds
+		[int]$Seconds,
+		[string]$Text
     )
 
+	$Aborted = $false
 	$StartTime = Get-Timestamp
 	while (($(Get-Timestamp) - $StartTime) -lt $Seconds)
 	{
-		Write-Host "`r$(Get-ClearHostLine)$($Seconds - ($(Get-Timestamp) - $StartTime))" -NoNewLine
+		$LeftSeconds = $($Seconds - ($(Get-Timestamp) - $StartTime))
+		if ($Text.Length -ne 0) {
+			Write-Host ("`r$(Get-ClearHostLine)$Text" -f $LeftSeconds) -NoNewLine
+		} else {
+			Write-Host "`r$(Get-ClearHostLine)$LeftSeconds" -NoNewLine
+		}
 
 		if ($Host.UI.RawUI.KeyAvailable) {
 			$KeyEvent = $Host.UI.RawUI.ReadKey('AllowCtrlC,NoEcho,IncludeKeyDown,IncludeKeyUp')
 			if ($KeyEvent.KeyDown -eq $true -and ($KeyEvent.VirtualKeyCode -eq 13 -or $KeyEvent.VirtualKeyCode -eq 27)) {
+				$Aborted = $true
 				break
 			}
 		} else {
 			Start-Sleep -Milliseconds 100
 		}
 	}
-	Write-Host "`r$(Get-ClearHostLine)" -NoNewLine
+
+	if ($Text.Length -ne 0) {
+		if ($Aborted) {
+			Write-Host (" timer aborted." -f $Seconds)
+		} else {
+			# restore original text for history
+			Write-Host ("`r$(Get-ClearHostLine)$Text" -f $Seconds)
+		}
+	} else {
+		# clear timer line
+		Write-Host "`r$(Get-ClearHostLine)" -NoNewLine
+	}
 }
 
 function Output-SessionsList {
@@ -262,8 +281,7 @@ function Open-Session {
 			continue
 		}
 
-		Write-Host "$(Get-ClearHostLine)Reconnection after $PauseSeconds seconds."
-		Sleep-OrWaitForPressEnter $PauseSeconds
+		Start-AbortableSleep $PauseSeconds "Reconnection after {0} seconds..."
 
 		Write-Host "$(Get-ClearHostLine)Reconnecting..."
 		$PauseSeconds = $PauseSeconds * 2
