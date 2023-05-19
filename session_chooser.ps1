@@ -147,11 +147,10 @@ function Save-PuttySession {
 
 			New-Item -Path "$($RegistryPath)$($NewSessionName)" -ErrorAction SilentlyContinue | out-null
 			if ($? -eq $true) {
-				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "HostName" -Value $NewHostName  -PropertyType "String" | out-null
-				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "PortNumber" -Value $NewPortNumber  -PropertyType "DWord" | out-null
-				if ($NewUserName -ne "") {
-					New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "UserName" -Value $NewUserName  -PropertyType "String" | out-null
-				}
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "HostName" -Value $NewHostName -PropertyType "String" | out-null
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "PortNumber" -Value $NewPortNumber -PropertyType "DWord" | out-null
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "UserName" -Value $NewUserName -PropertyType "String" | out-null
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "UserNameFromEnvironment" -Value 0 -PropertyType "DWord" | out-null
 				Write-Host 'New session successfully saved!' -ForegroundColor Green
 			} else {
 				Write-Host "Can't write: $($RegistryPath)$($NewSessionName)" -ForegroundColor Red
@@ -327,12 +326,18 @@ function Open-Session {
 	while ($true) {
 		$ts = Get-Timestamp
 		ssh -p $PortNumber $UserNamePrefix$HostName
+		$NormalExit = ($? -or $LASTEXITCODE -eq 130)
+
+		$Host.UI.RawUI.ForegroundColor = $ForegroundColor
+		$Host.UI.RawUI.BackgroundColor = $BackgroundColor
+		# TODO: re-read colors by this console. Currently it start work after exit
 
 		# check normal exit or via self close (bash/Ctrl-C,..)
-		if ($? -or $LASTEXITCODE -eq 130) {
+		if ($NormalExit) {
 			Save-PuttySession $SessionName $HostName $PortNumber $UserName
 			break
 		}
+
 		Write-Host "$(Get-ClearHostLine)Exit code = $LASTEXITCODE"
 
 		# check exit by Ctrl-C
