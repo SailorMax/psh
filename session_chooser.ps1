@@ -6,6 +6,8 @@
 # init
 $RegistryPath = 'Registry::HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\'
 $OriginalTitle = $Host.UI.RawUI.WindowTitle
+$ForegroundColor = $Host.UI.RawUI.ForegroundColor
+$BackgroundColor = $Host.UI.RawUI.BackgroundColor
 
 $InputMask = $args[0]
 $CheckConnectionTimeout = $args[1]
@@ -25,21 +27,23 @@ function Wait-PressEnter {
 		$PrevKeyEvent = $KeyEvent
 		$KeyEvent = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown,IncludeKeyUp')
 	} while (-not ($PrevKeyEvent -and ($KeyEvent.VirtualKeyCode -eq 13) -and ($PrevKeyEvent.VirtualKeyCode -eq $KeyEvent.VirtualKeyCode) -and ($PrevKeyEvent.KeyDown -ne $KeyEvent.KeyDown)))
+	$Host.UI.RawUI.FlushInputBuffer()
 }
 
 function Start-AbortableSleep {
     param (
 		[int]$Seconds,
-		[string]$Text
+		[string]$TextPattern
     )
 
 	$Aborted = $false
 	$StartTime = Get-Timestamp
+	$Host.UI.RawUI.FlushInputBuffer()
 	while (($(Get-Timestamp) - $StartTime) -lt $Seconds)
 	{
 		$LeftSeconds = $($Seconds - ($(Get-Timestamp) - $StartTime))
-		if ($Text.Length -ne 0) {
-			Write-Host ("`r$(Get-ClearHostLine)$Text" -f $LeftSeconds) -NoNewLine
+		if ($TextPattern.Length -ne 0) {
+			Write-Host ("`r$(Get-ClearHostLine)$TextPattern" -f $LeftSeconds) -NoNewLine
 		} else {
 			Write-Host "`r$(Get-ClearHostLine)$LeftSeconds" -NoNewLine
 		}
@@ -47,6 +51,7 @@ function Start-AbortableSleep {
 		if ($Host.UI.RawUI.KeyAvailable) {
 			$KeyEvent = $Host.UI.RawUI.ReadKey('AllowCtrlC,NoEcho,IncludeKeyDown,IncludeKeyUp')
 			if ($KeyEvent.KeyDown -eq $true -and ($KeyEvent.VirtualKeyCode -eq 13 -or $KeyEvent.VirtualKeyCode -eq 27)) {
+				$Host.UI.RawUI.FlushInputBuffer()
 				$Aborted = $true
 				break
 			}
@@ -55,12 +60,12 @@ function Start-AbortableSleep {
 		}
 	}
 
-	if ($Text.Length -ne 0) {
+	if ($TextPattern.Length -ne 0) {
 		if ($Aborted) {
 			Write-Host " timer aborted."
 		} else {
 			# restore original text for history
-			Write-Host ("`r$(Get-ClearHostLine)$Text" -f $Seconds)
+			Write-Host ("`r$(Get-ClearHostLine)$TextPattern" -f $Seconds)
 		}
 	} else {
 		# clear timer line
@@ -79,7 +84,7 @@ function Output-SessionsList {
 	Write-Host "---"
 }
 
-function Get-AllSessions {
+function Get-PuttySessions {
 	if ($script:AllSessions -eq $null) {
 		$script:AllSessions = @(Get-Item -Path "$($RegistryPath)*" |
 								Select-Object -ExpandProperty Name |
@@ -89,12 +94,78 @@ function Get-AllSessions {
 	return $script:AllSessions
 }
 
+function Get-UniqueSessionName {
+	param (
+		[string[]]$AllSessions,
+		[string]$SessionName
+	)
+
+	$OriginalSessionName = $SessionName
+	$counter = 2;
+	while ((@($AllSessions | Where-Object {$_ -eq $SessionName})).Length -gt 0) {
+		$SessionName = "$OriginalSessionName($counter)"
+		$counter += 1
+	}
+	return $SessionName
+}
+
+function Save-PuttySession {
+	param (
+		[string]$SessionName,
+		[string]$HostName,
+		[string]$PortNumber,
+		[string]$UserName
+	)
+
+	$AllSessions = Get-PuttySessions
+	$HostNameExists = $false
+	$ErrorActionPreference="SilentlyContinue"
+	foreach ($item in $AllSessions) {
+		$HostPortUser = Get-ItemPropertyValue -Path "$($RegistryPath)$($item)" -Name HostName, PortNumber
+		if (($HostPortUser[0] -eq $HostName -or $HostPortUser[0] -eq $SessionName) -and ($HostPortUser[1] -eq $PortNumber)) {
+			$HostNameExists = $true
+			$HostUserNameExists = ($HostPortUser[2] -eq $UserName)
+			break
+		}
+	}
+	$ErrorActionPreference="Continue"
+
+	if (-not $HostNameExists -or (-not $HostUserNameExists -and $UserName -eq "")) {
+		$Host.UI.RawUI.FlushInputBuffer()
+		Write-Host "Do you want to save this session ($($UserName)@$($HostName):$($PortNumber))? [y/N]: " -NoNewLine
+		$confirmation = $Host.UI.RawUI.ReadKey('AllowCtrlC,IncludeKeyDown')
+		$Host.UI.RawUI.FlushInputBuffer()
+		Write-Host ""
+		if ($confirmation.Character -eq 'y') {
+			$SessionName = Get-UniqueSessionName $AllSessions $SessionName
+			if (!($NewSessionName = Read-Host "Session name [$SessionName]")) { $NewSessionName = $SessionName }
+			if (!($NewHostName = Read-Host "Host name [$HostName]")) { $NewHostName = $HostName }
+			if (!($NewPortNumber = Read-Host "Port number [$PortNumber]")) { $NewPortNumber = $PortNumber }
+			$NewUserName = Read-Host "User name []"
+
+			$NewSessionName = Get-UniqueSessionName $AllSessions $NewSessionName
+
+			New-Item -Path "$($RegistryPath)$($NewSessionName)" -ErrorAction SilentlyContinue | out-null
+			if ($? -eq $true) {
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "HostName" -Value $NewHostName  -PropertyType "String" | out-null
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "PortNumber" -Value $NewPortNumber  -PropertyType "DWord" | out-null
+				if ($NewUserName -ne "") {
+					New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "UserName" -Value $NewUserName  -PropertyType "String" | out-null
+				}
+				Write-Host 'New session successfully saved!' -ForegroundColor Green
+			} else {
+				Write-Host "Can't write: $($RegistryPath)$($NewSessionName)" -ForegroundColor Red
+			}
+		}
+	}
+}
+
 function Choose-Session {
     param (
         $Mask
     )
 	# get all sessions
-	$AllSessions = Get-AllSessions
+	$AllSessions = Get-PuttySessions
 	$ServerPort = $null
 	$Number = $null
 
@@ -148,7 +219,7 @@ function Choose-Session {
 	return $Sessions[$Number-1]
 }
 
-function Get-UserNameAsPrefix {
+function Choose-UserName {
     param (
 		[string]$UserName,
 		[int]$UserNameFromEnvironment
@@ -161,7 +232,6 @@ function Get-UserNameAsPrefix {
 		} else {
 			Write-Host "login as: $UserName"
 		}
-		$UserName = "$UserName@"
 	} else {
 		$UserName = ''
 		Write-Host "login as: $($env:UserName)"
@@ -245,8 +315,14 @@ function Open-Session {
 		$Host.UI.RawUI.WindowTitle = "$SessionName ($($HostName):$PortNumber)"
 	}
 
+	# setup username as prefix
+	$UserNamePrefix = ""
+	$UserName = Choose-UserName $UserName $UserNameFromEnvironment
+	if ($UserName -ne "") {
+		$UserNamePrefix = "$UserName@"
+	}
+
 	# start session
-	$UserNamePrefix = Get-UserNameAsPrefix $UserName $UserNameFromEnvironment
 	$PauseSeconds = 5
 	while ($true) {
 		$ts = Get-Timestamp
@@ -254,6 +330,7 @@ function Open-Session {
 
 		# check normal exit or via self close (bash/Ctrl-C,..)
 		if ($? -or $LASTEXITCODE -eq 130) {
+			Save-PuttySession $SessionName $HostName $PortNumber $UserName
 			break
 		}
 		Write-Host "$(Get-ClearHostLine)Exit code = $LASTEXITCODE"
@@ -299,7 +376,7 @@ function Try-ToUseDirectHostNameAndExit {
 		return
 	}
 
-	$AllSessions = Get-AllSessions
+	$AllSessions = Get-PuttySessions
 	$Sessions = @($AllSessions | Where-Object {$_ -match $HostString})
 	if ($Sessions.Count -ne 0) {
 		return
