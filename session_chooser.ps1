@@ -268,7 +268,7 @@ function Check-HostConnection {
 	return $HostAccessibility
 }
 
-function Open-Session {
+function Open-SshSession {
     param (
 		[string]$SessionName,
         [string]$HostName,
@@ -372,11 +372,56 @@ function Open-Session {
 	$Host.UI.RawUI.WindowTitle = $OriginalTitle
 }
 
+function Open-SerialSession {
+    param (
+		[string]$SessionName,
+        [string]$SerialLine,
+		[int]$SerialSpeed,
+		[int]$SerialDataBits,
+		[int]$SerialStopHalfbits,
+		[int]$SerialParity,
+		[int]$SerialFlowControl
+    )
+
+	# https://documentation.help/PuTTY/using-cmdline-sercfg.html
+	$Parities = @('n','o','e','m','s')	# none, odd, even, mark and space
+	$ParityNames = @('none','odd','even','mark','space')
+	$FlowControl = @('N','X','R','D')	# None, XON/XOFF, RTS/CTS and DSR/DTR
+	$FlowControlNames = @('None','XON/XOFF','RTS/CTS','DSR/DTR')
+	$ConnectionArgs = "$SerialSpeed,$SerialDataBits,$SerialStopHalfbits,$($Parities[$SerialParity]),$($FlowControl[$SerialFlowControl])"
+	$ConnectionArgNames = "$SerialSpeed,$SerialDataBits,$SerialStopHalfbits,$($ParityNames[$SerialParity]),$($FlowControlNames[$SerialFlowControl])"
+	$DefaultName = "${SerialLine}:$ConnectionArgNames"
+
+	if ($SessionName.Length -eq 0) {
+		$SessionName = $DefaultName
+	}
+
+	Write-Host "connecting to " -NoNewLine
+	Write-Host $SessionName -ForegroundColor Yellow -NoNewLine
+	if ($SessionName -ne $DefaultName) {
+		Write-Host " ($DefaultName)" -NoNewLine
+	}
+	Write-Host '...'
+
+	# setup window title
+	if ($SessionName -eq $DefaultName) {
+		$Host.UI.RawUI.WindowTitle = "$SessionName"
+	} else {
+		$Host.UI.RawUI.WindowTitle = "$SessionName ($DefaultName)"
+	}
+
+	# CHECK: sometimes require \\.\COMX
+	plink -serial $SerialLine -sercfg $ConnectionArgs
+
+	$Host.UI.RawUI.WindowTitle = $OriginalTitle
+}
+
 function Try-ToUseDirectHostNameAndExit {
     param (
 		[string]$HostString
     )
 
+	# TODO: add support direct connect to serial port
 	if ($HostString -notmatch '^[a-zA-Z0-9_\-:@\.]+$') {
 		return
 	}
@@ -404,7 +449,7 @@ function Try-ToUseDirectHostNameAndExit {
 		return
 	}
 
-	Open-Session '' $HostPort[0] $HostPort[1] $UserHost[0]
+	Open-SshSession '' $HostPort[0] $HostPort[1] $UserHost[0]
 	exit 0
 }
 
@@ -419,7 +464,14 @@ if ($SessionName -eq $null) {
 	putty
 } else {
 	# get connection parameters
-	$HostPortUser = Get-ItemPropertyValue -Path "$($RegistryPath)$($SessionName)" -Name HostName, PortNumber, UserName, UserNameFromEnvironment
+	$HostPortUser = Get-ItemPropertyValue -Path "$($RegistryPath)$($SessionName)" -Name Protocol, HostName, PortNumber, UserName, UserNameFromEnvironment, SerialLine, SerialSpeed, SerialDataBits, SerialStopHalfbits, SerialParity, SerialFlowControl
 
-	Open-Session $SessionName $HostPortUser[0] $HostPortUser[1] $HostPortUser[2] $HostPortUser[3]
+	if ($HostPortUser[0] -eq "ssh") {
+		Open-SshSession $SessionName $HostPortUser[1] $HostPortUser[2] $HostPortUser[3] $HostPortUser[4]
+	} elseif ($HostPortUser[0] -eq "serial") {
+		Open-SerialSession $SessionName $HostPortUser[5] $HostPortUser[6] $HostPortUser[7] $HostPortUser[8] $HostPortUser[9] $HostPortUser[10]
+	} else {
+		Write-Host "Error" -ForegroundColor Red -NoNewLine
+		Write-Host ". Protocol '$($HostPortUser[0])' not yet supported."
+	}
 }
