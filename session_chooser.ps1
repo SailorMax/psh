@@ -2,12 +2,19 @@
 # - filter_word
 # - host:port
 # - host:port check_host_timeout
+# - COMX:speed[,parity,data_bits,stop_half_bits,flow_control]
 
 # init
 $RegistryPath = 'Registry::HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\'
 $OriginalTitle = $Host.UI.RawUI.WindowTitle
 $ForegroundColor = $Host.UI.RawUI.ForegroundColor
 $BackgroundColor = $Host.UI.RawUI.BackgroundColor
+
+# https://documentation.help/PuTTY/using-cmdline-sercfg.html
+$SerialParities = @('n','o','e','m','s')	# none, odd, even, mark and space
+$SerialParityNames = @('none','odd','even','mark','space')
+$SerialFlowControl = @('N','X','R','D')	# None, XON/XOFF, RTS/CTS and DSR/DTR
+$SerialFlowControlNames = @('None','XON/XOFF','RTS/CTS','DSR/DTR')
 
 $InputMask = $args[0]
 $CheckConnectionTimeout = $args[1]
@@ -376,39 +383,33 @@ function Open-SerialSession {
     param (
 		[string]$SessionName,
         [string]$SerialLine,
-		[int]$SerialSpeed,
-		[int]$SerialDataBits,
-		[int]$SerialStopHalfbits,
-		[int]$SerialParity,
-		[int]$SerialFlowControl
+		[int]$Speed,
+		[int]$Parity,
+		[int]$DataBits,
+		[string]$StopHalfbits,
+		[int]$FlowControl
     )
 
-	# https://documentation.help/PuTTY/using-cmdline-sercfg.html
-	$Parities = @('n','o','e','m','s')	# none, odd, even, mark and space
-	$ParityNames = @('none','odd','even','mark','space')
-	$FlowControl = @('N','X','R','D')	# None, XON/XOFF, RTS/CTS and DSR/DTR
-	$FlowControlNames = @('None','XON/XOFF','RTS/CTS','DSR/DTR')
-	$ConnectionArgs = "$SerialSpeed,$SerialDataBits,$SerialStopHalfbits,$($Parities[$SerialParity]),$($FlowControl[$SerialFlowControl])"
-	$ConnectionArgNames = "$SerialSpeed,$SerialDataBits,$SerialStopHalfbits,$($ParityNames[$SerialParity]),$($FlowControlNames[$SerialFlowControl])"
-	$DefaultName = "${SerialLine}:$ConnectionArgNames"
+	$ConnectionArgs = "$Speed,$($SerialParities[$Parity]),$DataBits,$StopHalfbits,$($SerialFlowControl[$FlowControl])"
+	$ConnectionArgNames = "$Speed,$($SerialParityNames[$Parity]),$DataBits,$StopHalfbits,$($SerialFlowControlNames[$FlowControl])"
+	$DefaultName = "${SerialLine}:$ConnectionArgs"
+	$DescribedName = "${SerialLine}:$ConnectionArgNames"
 
 	if ($SessionName.Length -eq 0) {
 		$SessionName = $DefaultName
 	}
 
+	# output current settings
+	mode $SerialLine
+
+	# connecting message
 	Write-Host "connecting to " -NoNewLine
 	Write-Host $SessionName -ForegroundColor Yellow -NoNewLine
-	if ($SessionName -ne $DefaultName) {
-		Write-Host " ($DefaultName)" -NoNewLine
-	}
+	Write-Host " ($DescribedName)" -NoNewLine
 	Write-Host '...'
 
 	# setup window title
-	if ($SessionName -eq $DefaultName) {
-		$Host.UI.RawUI.WindowTitle = "$SessionName"
-	} else {
-		$Host.UI.RawUI.WindowTitle = "$SessionName ($DefaultName)"
-	}
+	$Host.UI.RawUI.WindowTitle = "$SessionName ($DescribedName)"
 
 	# CHECK: sometimes require \\.\COMX
 	plink -serial $SerialLine -sercfg $ConnectionArgs
@@ -421,36 +422,61 @@ function Try-ToUseDirectHostNameAndExit {
 		[string]$HostString
     )
 
-	# TODO: add support direct connect to serial port
-	if ($HostString -notmatch '^[a-zA-Z0-9_\-:@\.]+$') {
-		return
+	# detect serial port connection
+	# input string translated to COMX:9600 n 8 1 X
+	if ($HostString -match '^COM[0-9]+\:[0-9,\.noemsNXRD ]+$') {
+		$PortArgs = $HostString.Split(":", 2)
+
+		# default settings: 9600,n,8,1,X
+		$Speed = '9600';
+		$Parity = $SerialParities.indexOf('n');
+		$DataBits = 8;
+		$StopHalfbits = 1;
+		$FlowControl = $SerialFlowControl.indexOf('X');
+
+		$Args = $PortArgs[1].Split(" ")
+		foreach ($val in $Args) {
+			if ($SerialParities.Contains($val)) { $Parity = $SerialParities.indexOf($val) }
+			elseif ($SerialFlowControl.Contains($val)) { $FlowControl = $SerialFlowControl.indexOf($val) }
+			elseif ($val -match '^(1|1\.5|2)$') { $StopHalfbits = $val }
+			elseif ($val -match '^[5-9]$') { $DataBits = $val }
+			else { $Speed = $val }
+		}
+
+		Open-SerialSession '' $PortArgs[0] $Speed $Parity $DataBits $StopHalfbits $FlowControl
+		exit 0
 	}
 
-	$AllSessions = Get-PuttySessions
-	$Sessions = @($AllSessions | Where-Object {$_ -match $HostString})
-	if ($Sessions.Count -ne 0) {
-		return
+	# detect ssh connection
+	if ($HostString -match '^[a-zA-Z0-9_\-:@\.]+$') {
+		$AllSessions = Get-PuttySessions
+		$Sessions = @($AllSessions | Where-Object {$_ -match $HostString})
+		if ($Sessions.Count -ne 0) {
+			return
+		}
+
+		if ($HostString -match '@') {
+			$UserHost = $HostString.Split("@", 2)
+		} else {
+			$UserHost = '', $HostString
+		}
+
+		if ($UserHost[1] -match ':') {
+			$HostPort = $UserHost[1].Split(":", 2)
+		} else {
+			# skip address without port to allow mistaken filter words
+			return
+		}
+
+		if ($HostPort[1] -notmatch '^\d*$') {
+			return
+		}
+
+		Open-SshSession '' $HostPort[0] $HostPort[1] $UserHost[0]
+		exit 0
 	}
 
-	if ($HostString -match '@') {
-		$UserHost = $HostString.Split("@", 2)
-	} else {
-		$UserHost = '', $HostString
-	}
-
-	if ($UserHost[1] -match ':') {
-		$HostPort = $UserHost[1].Split(":", 2)
-	} else {
-		# skip address without port to allow mistaken filter words
-		return
-	}
-
-	if ($HostPort[1] -notmatch '^\d*$') {
-		return
-	}
-
-	Open-SshSession '' $HostPort[0] $HostPort[1] $UserHost[0]
-	exit 0
+	return
 }
 
 
@@ -464,7 +490,7 @@ if ($SessionName -eq $null) {
 	putty
 } else {
 	# get connection parameters
-	$HostPortUser = Get-ItemPropertyValue -Path "$($RegistryPath)$($SessionName)" -Name Protocol, HostName, PortNumber, UserName, UserNameFromEnvironment, SerialLine, SerialSpeed, SerialDataBits, SerialStopHalfbits, SerialParity, SerialFlowControl
+	$HostPortUser = Get-ItemPropertyValue -Path "$($RegistryPath)$($SessionName)" -Name Protocol, HostName, PortNumber, UserName, UserNameFromEnvironment, SerialLine, SerialSpeed, SerialParity, SerialDataBits, SerialStopHalfbits, SerialFlowControl
 
 	if ($HostPortUser[0] -eq "ssh") {
 		Open-SshSession $SessionName $HostPortUser[1] $HostPortUser[2] $HostPortUser[3] $HostPortUser[4]
