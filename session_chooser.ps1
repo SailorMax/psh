@@ -154,10 +154,19 @@ function Save-PuttySession {
 
 			New-Item -Path "$($RegistryPath)$($NewSessionName)" -ErrorAction SilentlyContinue | out-null
 			if ($? -eq $true) {
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "Protocol" -Value "ssh" -PropertyType "String" | out-null
 				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "HostName" -Value $NewHostName -PropertyType "String" | out-null
 				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "PortNumber" -Value $NewPortNumber -PropertyType "DWord" | out-null
 				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "UserName" -Value $NewUserName -PropertyType "String" | out-null
 				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "UserNameFromEnvironment" -Value 0 -PropertyType "DWord" | out-null
+				# default values for serial connections
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "SerialLine" -Value "COM1" -PropertyType "String" | out-null
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "SerialSpeed" -Value 9600 -PropertyType "DWord" | out-null
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "SerialParity" -Value 0 -PropertyType "DWord" | out-null
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "SerialDataBits" -Value 8 -PropertyType "DWord" | out-null
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "SerialStopHalfbits" -Value 2 -PropertyType "DWord" | out-null
+				New-ItemProperty -Path "$($RegistryPath)$($NewSessionName)" -Name "SerialFlowControl" -Value 1 -PropertyType "DWord" | out-null
+				#
 				Write-Host 'New session successfully saved!' -ForegroundColor Green
 			} else {
 				Write-Host "Can't write: $($RegistryPath)$($NewSessionName)" -ForegroundColor Red
