@@ -434,7 +434,7 @@ function Try-ToUseDirectHostNameAndExit {
 	# detect serial port connection
 	# input string translated to COMX:9600 n 8 1 X
 	if ($HostString -match '^COM[0-9]+\:[0-9,\.noemsNXRD ]+$') {
-		$PortArgs = $HostString.Split(":", 2)
+		$PortName, $PortArgs = $HostString.Split(":", 2)
 
 		# default settings: 9600,n,8,1,X
 		$Speed = '9600';
@@ -443,7 +443,7 @@ function Try-ToUseDirectHostNameAndExit {
 		$StopHalfbits = 1;
 		$FlowControl = $SerialFlowControl.indexOf('X');
 
-		$Args = $PortArgs[1].Split(" ")
+		$Args = $PortArgs.Split(" ")
 		foreach ($val in $Args) {
 			if ($SerialParities.Contains($val)) { $Parity = $SerialParities.indexOf($val) }
 			elseif ($SerialFlowControl.Contains($val)) { $FlowControl = $SerialFlowControl.indexOf($val) }
@@ -452,7 +452,7 @@ function Try-ToUseDirectHostNameAndExit {
 			else { $Speed = $val }
 		}
 
-		Open-SerialSession '' $PortArgs[0] $Speed $Parity $DataBits $StopHalfbits $FlowControl
+		Open-SerialSession '' $PortName $Speed $Parity $DataBits $StopHalfbits $FlowControl
 		exit 0
 	}
 
@@ -465,23 +465,23 @@ function Try-ToUseDirectHostNameAndExit {
 		}
 
 		if ($HostString -match '@') {
-			$UserHost = $HostString.Split("@", 2)
+			$UserName, $UserHost = $HostString.Split("@", 2)
 		} else {
-			$UserHost = '', $HostString
+			$UserName, $UserHost = '', $HostString
 		}
 
-		if ($UserHost[1] -match ':') {
-			$HostPort = $UserHost[1].Split(":", 2)
+		if ($UserHost -match ':') {
+			$UserHost, $HostPort = $UserHost.Split(":", 2)
 		} else {
 			# skip address without port to allow mistaken filter words
 			return
 		}
 
-		if ($HostPort[1] -notmatch '^\d*$') {
+		if ($HostPort -notmatch '^\d+$') {
 			return
 		}
 
-		Open-SshSession '' $HostPort[0] $HostPort[1] $UserHost[0]
+		Open-SshSession '' $UserHost $HostPort $UserName
 		exit 0
 	}
 
@@ -499,14 +499,17 @@ if ($SessionName -eq $null) {
 	putty
 } else {
 	# get connection parameters
-	$HostPortUser = Get-ItemPropertyValue -Path "$($RegistryPath)$($SessionName)" -Name Protocol, HostName, PortNumber, UserName, UserNameFromEnvironment, SerialLine, SerialSpeed, SerialParity, SerialDataBits, SerialStopHalfbits, SerialFlowControl
+	$HostPortUser = Get-ItemProperty -Path "$($RegistryPath)$($SessionName)" | Select-Object Protocol, HostName, PortNumber, UserName, UserNameFromEnvironment, SerialLine, SerialSpeed, SerialParity, SerialDataBits, SerialStopHalfbits, SerialFlowControl
+	if ($HostPortUser.Protocol -eq $null) {
+		$HostPortUser.Protocol = "ssh"
+	}
 
-	if ($HostPortUser[0] -eq "ssh") {
-		Open-SshSession $SessionName $HostPortUser[1] $HostPortUser[2] $HostPortUser[3] $HostPortUser[4]
-	} elseif ($HostPortUser[0] -eq "serial") {
-		Open-SerialSession $SessionName $HostPortUser[5] $HostPortUser[6] $HostPortUser[7] $HostPortUser[8] $HostPortUser[9] $HostPortUser[10]
+	if ($HostPortUser.Protocol -eq "ssh") {
+		Open-SshSession $SessionName $HostPortUser.HostName $HostPortUser.PortNumber $HostPortUser.UserName $HostPortUser.UserNameFromEnvironment
+	} elseif ($HostPortUser.Protocol -eq "serial") {
+		Open-SerialSession $SessionName $HostPortUser.SerialLine $HostPortUser.SerialSpeed $HostPortUser.SerialParity $HostPortUser.SerialDataBits $HostPortUser.SerialStopHalfbits $HostPortUser.SerialFlowControl
 	} else {
 		Write-Host "Error" -ForegroundColor Red -NoNewLine
-		Write-Host ". Protocol '$($HostPortUser[0])' not yet supported."
+		Write-Host ". Protocol '$($HostPortUser.Protocol)' not yet supported."
 	}
 }
